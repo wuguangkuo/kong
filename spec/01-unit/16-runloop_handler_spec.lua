@@ -112,18 +112,18 @@ describe("runloop handler", function()
       local semaphores = require "ngx.semaphore"._semaphores
       local handler = require "kong.runloop.handler"
 
-      local update_router_spy = spy.new(function()
+      local build_router_spy = spy.new(function()
         return nil, "error injected by test (feel free to ignore :) )"
       end)
 
       handler.init_worker.before({})
 
       handler._set_router(mock_router)
-      handler._set_update_router(update_router_spy)
+      handler._set_build_router(build_router_spy)
 
       handler.access.before({})
 
-      assert.spy(update_router_spy).was_called(1)
+      assert.spy(build_router_spy).was_called(1)
 
       -- check semaphore
       assert.equal(1, semaphores[1].value)
@@ -137,14 +137,14 @@ describe("runloop handler", function()
 
       handler.init_worker.before()
 
-      local update_router_spy = spy.new(function() end)
-      handler._set_update_router(update_router_spy)
+      local build_router_spy = spy.new(function() end)
+      handler._set_build_router(build_router_spy)
       handler._set_router(mock_router)
 
       -- call it once to create a semaphore
       handler.access.before({})
 
-      assert.spy(update_router_spy).was_called(1)
+      assert.spy(build_router_spy).was_called(1)
 
       -- force a router rebuild
       handler._set_router_version("old")
@@ -157,7 +157,7 @@ describe("runloop handler", function()
       handler.access.before({})
 
       -- was called even if semaphore timed out on acquisition
-      assert.spy(update_router_spy).was_called(2)
+      assert.spy(build_router_spy).was_called(2)
 
       -- check semaphore
       assert.equal(1, semaphores[1].value)
@@ -170,15 +170,15 @@ describe("runloop handler", function()
 
       local handler = require "kong.runloop.handler"
 
-      local update_router_spy = spy.new(function() end)
-      handler._set_update_router(update_router_spy)
+      local build_router_spy = spy.new(function() end)
+      handler._set_build_router(build_router_spy)
       handler._set_router(mock_router)
 
       handler.init_worker.before()
 
       handler.access.before({})
 
-      assert.spy(update_router_spy).was_called(0)
+      assert.spy(build_router_spy).was_called(0)
       assert.equal(mock_router, handler._get_updated_router())
     end)
 

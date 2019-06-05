@@ -78,10 +78,8 @@ local server_header = meta._SERVER_TOKENS
 local rebuild_router
 
 -- for tests
-local _set_update_plugins_iterator
-local _set_update_router
-local _set_build_router
 local _set_router
+local _set_build_router
 local _set_router_version
 
 
@@ -459,12 +457,6 @@ do
   get_plugins_iterator = function()
     return plugins_iterator
   end
-
-
-  -- for tests only
-  _set_update_plugins_iterator = function(f)
-    update_plugins_iterator = f
-  end
 end
 
 
@@ -681,12 +673,6 @@ do
 
 
   -- for tests only
-  _set_update_router = function(f)
-    update_router = f
-  end
-
-
-  -- for tests only
   _set_build_router = function(f)
     build_router = f
   end
@@ -795,10 +781,8 @@ return {
 
   -- exposed only for tests
   _set_router = _set_router,
-  _set_update_router = _set_update_router,
   _set_build_router = _set_build_router,
   _set_router_version = _set_router_version,
-  _set_update_plugins_iterator = _set_update_plugins_iterator,
   _get_updated_router = get_updated_router,
   _update_lua_mem = update_lua_mem,
 
