@@ -54,7 +54,7 @@ function concurrency.with_worker_mutex(opts, fn)
 end
 
 
-function concurrency.with_coroutine_mutex(opts, fn)
+function concurrency.with_coroutine_mutex(opts, fn, ...)
   if type(opts) ~= "table" then
     error("opts must be a table", 2)
   end
@@ -106,7 +106,7 @@ function concurrency.with_coroutine_mutex(opts, fn)
     end
   end
 
-  local pok, ok, err = pcall(fn)
+  local pok, ok, err = pcall(fn, ...)
 
   if lok then
     -- release lock

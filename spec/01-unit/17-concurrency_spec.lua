@@ -105,6 +105,44 @@ describe("kong.concurrency", function()
       ]]), table.concat(output, "\n"))
     end)
 
+    it("passes arguments to the callback function", function()
+      setup_it_block()
+
+      local output = {}
+
+      local co = {}
+      for c = 1, 2 do
+        co[c] = coroutine.create(function()
+          local concurrency = require("kong.concurrency")
+          table.insert(output, "hello " .. c)
+          coroutine.yield()
+          concurrency.with_coroutine_mutex({ name = "test" }, function(arg1, arg2)
+            table.insert(output, "inside " .. arg1 .. " (arg2: " .. arg2 .. ")")
+            coroutine.yield()
+            table.insert(output, "releasing " .. arg1)
+          end, c, "hello")
+          table.insert(output, "goodbye " .. c)
+        end)
+      end
+
+      -- mock a round-robin coroutine scheduler
+      for i = 1, 10 do
+        coroutine.resume(co[1])
+        coroutine.resume(co[2])
+      end
+
+      assert.same(unindent([[
+        hello 1
+        hello 2
+        inside 1 (arg2: hello)
+        releasing 1
+        goodbye 1
+        inside 2 (arg2: hello)
+        releasing 2
+        goodbye 2
+      ]]), table.concat(output, "\n"))
+    end)
+
     it("locks coroutines with a mutex", function()
       setup_it_block()
 
