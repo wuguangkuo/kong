@@ -488,15 +488,15 @@ function Kong.init_worker()
 
   runloop.init_worker.before()
 
-
   -- run plugins init_worker context
-  ok, err = runloop.update_plugins_iterator()
-  if not ok then
-    ngx_log(ngx_CRIT, "error building plugins iterator: ", err)
+
+  local plugins_iterator = runloop.get_plugins_iterator()
+  if not plugins_iterator then
+    ngx_log(ngx_CRIT, "could not get plugins iterator to run ",
+                      "init_worker plugins phase")
     return
   end
 
-  local plugins_iterator = runloop.get_plugins_iterator()
   for plugin, _ in plugins_iterator:iterate(nil, "init_worker") do
     kong_global.set_namespaced_log(kong, plugin.name)
     plugin.handler:init_worker()

@@ -70,10 +70,10 @@ local PLUGINS_ITERATOR_ASYNC_OPTS
 
 
 local get_plugins_iterator, get_updated_plugins_iterator
-local build_plugins_iterator, update_plugins_iterator
+local build_plugins_iterator
 local rebuild_plugins_iterator
 
-local get_updated_router, build_router, update_router
+local get_updated_router, build_router
 local server_header = meta._SERVER_TOKENS
 local rebuild_router
 
@@ -391,11 +391,11 @@ local function rebuild(name, callback, version, opts)
     return nil, "failed to retrieve " .. name .. " version: " .. err
   end
 
-  if current_version == version then
+  if current_version and current_version == version then
     return true
   end
 
-  return concurrency.with_coroutine_mutex(opts, callback)
+  return concurrency.with_coroutine_mutex(opts, callback, version)
 end
 
 
@@ -413,29 +413,9 @@ do
   end
 
 
-  update_plugins_iterator = function()
-    local version, err = kong.cache:get("plugins_iterator:version", TTL_ZERO,
-                                        utils.uuid)
-    if err then
-      return nil, "failed to retrieve plugins iterator version: " .. err
-    end
-
-    if plugins_iterator and plugins_iterator.version == version then
-      return true
-    end
-
-    local ok, err = build_plugins_iterator(version)
-    if not ok then
-      return nil, --[[ 'err' fully formatted ]] err
-    end
-
-    return true
-  end
-
-
   rebuild_plugins_iterator = function(timeout)
     local plugins_iterator_version = plugins_iterator and plugins_iterator.version
-    return rebuild("plugins_iterator", update_plugins_iterator,
+    return rebuild("plugins_iterator", build_plugins_iterator,
                    plugins_iterator_version, timeout)
   end
 
@@ -631,30 +611,8 @@ do
   end
 
 
-  update_router = function()
-    -- we might not need to rebuild the router (if we were not
-    -- the first request in this process to enter this code path)
-    -- check again and rebuild only if necessary
-    local version, err = kong.cache:get("router:version", TTL_ZERO, utils.uuid)
-    if err then
-      return nil, "failed to retrieve router version: " .. err
-    end
-
-    if version == router_version then
-      return true
-    end
-
-    local ok, err = build_router(version)
-    if not ok then
-      return nil, --[[ 'err' fully formatted ]] err
-    end
-
-    return true
-  end
-
-
   rebuild_router = function(opts)
-    return rebuild("router", update_router, router_version, opts)
+    return rebuild("router", build_router, router_version, opts)
   end
 
 
@@ -774,7 +732,6 @@ return {
   build_router = build_router,
 
   build_plugins_iterator = build_plugins_iterator,
-  update_plugins_iterator = update_plugins_iterator,
   get_plugins_iterator = get_plugins_iterator,
   get_updated_plugins_iterator = get_updated_plugins_iterator,
   set_init_versions_in_cache = set_init_versions_in_cache,
