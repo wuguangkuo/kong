@@ -253,6 +253,7 @@ local attribute_types = {
     ["string"] = true,
     ["number"] = true,
     ["integer"] = true,
+    ["foreign"] = true,
   },
   abstract = {
     ["string"] = true,

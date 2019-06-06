@@ -418,7 +418,8 @@ local function generate_foreign_key_methods(schema)
   local methods = {}
 
   for name, field in schema:each_field() do
-    if field.type == "foreign" then
+    local field_is_foreign = field.type == "foreign"
+    if field_is_foreign then
       validate_foreign_key_is_single_primary_key(field)
 
       local page_method_name = "page_for_" .. name
@@ -437,14 +438,13 @@ local function generate_foreign_key_methods(schema)
           validate_options_type(options)
         end
 
-        local ok, errors = self.schema:validate_field(field, foreign_key)
+        local ok, err = self.schema:validate_field(field, foreign_key)
         if not ok then
-          local err_t = self.errors:invalid_primary_key(errors)
+          local err_t = self.errors:invalid_foreign_key(err)
           return nil, tostring(err_t), err_t
         end
 
         if size ~= nil then
-          local err
           ok, err = validate_size_value(size)
           if not ok then
             local err_t = self.errors:invalid_size(err)
@@ -456,9 +456,9 @@ local function generate_foreign_key_methods(schema)
         end
 
         if options ~= nil then
-          ok, errors = validate_options_value(options, schema, "select")
+          ok, err = validate_options_value(options, schema, "select")
           if not ok then
-            local err_t = self.errors:invalid_options(errors)
+            local err_t = self.errors:invalid_options(err)
             return nil, tostring(err_t), err_t
           end
         end
@@ -474,8 +474,7 @@ local function generate_foreign_key_methods(schema)
           return nil, tostring(err_t), err_t
         end
 
-        local entities, err
-        entities, err, err_t = self:rows_to_entities(rows, options)
+        local entities, err, err_t = self:rows_to_entities(rows, options)
         if err then
           return nil, err, err_t
         end
@@ -506,17 +505,16 @@ local function generate_foreign_key_methods(schema)
           validate_options_type(options)
         end
 
-        local ok, errors = field.schema:validate_primary_key(foreign_key)
-
+        local ok, err = schema:validate_field(field, foreign_key)
         if not ok then
-          local err_t = self.errors:invalid_primary_key(errors)
+          local err_t = self.errors:invalid_foreign_key(err)
           return iteration.failed(tostring(err_t), err_t)
         end
 
         if options ~= nil then
-          ok, errors = validate_options_value(options, schema, "select")
+          ok, err = validate_options_value(options, schema, "select")
           if not ok then
-            local err_t = self.errors:invalid_options(errors)
+            local err_t = self.errors:invalid_options(err)
             return nil, tostring(err_t), err_t
           end
         end
@@ -529,9 +527,14 @@ local function generate_foreign_key_methods(schema)
 
         return iteration.by_row(self, pager, size)
       end
+    end
 
-    elseif field.unique or schema.endpoint_key == name then
+    if field.unique or schema.endpoint_key == name then
       methods["select_by_" .. name] = function(self, unique_value, options)
+        if field_is_foreign then
+          validate_foreign_key_type(unique_value)
+        end
+
         validate_unique_type(unique_value, name, field)
 
         if options ~= nil then
@@ -540,15 +543,19 @@ local function generate_foreign_key_methods(schema)
 
         local ok, err = schema:validate_field(field, unique_value)
         if not ok then
+          if field_is_foreign then
+            local err_t = self.errors:invalid_foreign_key(err)
+            return nil, tostring(err_t), err_t
+          end
+
           local err_t = self.errors:invalid_unique(name, err)
           return nil, tostring(err_t), err_t
         end
 
         if options ~= nil then
-          local errors
-          ok, errors = validate_options_value(options, schema, "select")
+          ok, err = validate_options_value(options, schema, "select")
           if not ok then
-            local err_t = self.errors:invalid_options(errors)
+            local err_t = self.errors:invalid_options(err)
             return nil, tostring(err_t), err_t
           end
         end
@@ -566,6 +573,10 @@ local function generate_foreign_key_methods(schema)
       end
 
       methods["update_by_" .. name] = function(self, unique_value, entity, options)
+        if field_is_foreign then
+          validate_foreign_key_type(unique_value)
+        end
+
         validate_unique_type(unique_value, name, field)
         validate_entity_type(entity)
 
@@ -575,6 +586,11 @@ local function generate_foreign_key_methods(schema)
 
         local ok, err = schema:validate_field(field, unique_value)
         if not ok then
+          if field_is_foreign then
+            local err_t = self.errors:invalid_foreign_key(err)
+            return nil, tostring(err_t), err_t
+          end
+
           local err_t = self.errors:invalid_unique(name, err)
           return nil, tostring(err_t), err_t
         end
@@ -602,6 +618,10 @@ local function generate_foreign_key_methods(schema)
       end
 
       methods["upsert_by_" .. name] = function(self, unique_value, entity, options)
+        if field_is_foreign then
+          validate_foreign_key_type(unique_value)
+        end
+
         validate_unique_type(unique_value, name, field)
         validate_entity_type(entity)
 
@@ -611,6 +631,11 @@ local function generate_foreign_key_methods(schema)
 
         local ok, err = schema:validate_field(field, unique_value)
         if not ok then
+          if field_is_foreign then
+            local err_t = self.errors:invalid_foreign_key(err)
+            return nil, tostring(err_t), err_t
+          end
+
           local err_t = self.errors:invalid_unique(name, err)
           return nil, tostring(err_t), err_t
         end
@@ -638,6 +663,10 @@ local function generate_foreign_key_methods(schema)
       end
 
       methods["delete_by_" .. name] = function(self, unique_value, options)
+        if field_is_foreign then
+          validate_foreign_key_type(unique_value)
+        end
+
         validate_unique_type(unique_value, name, field)
 
         if options ~= nil then
@@ -646,15 +675,19 @@ local function generate_foreign_key_methods(schema)
 
         local ok, err = schema:validate_field(field, unique_value)
         if not ok then
+          if field_is_foreign then
+            local err_t = self.errors:invalid_foreign_key(err)
+            return nil, tostring(err_t), err_t
+          end
+
           local err_t = self.errors:invalid_unique(name, err)
           return nil, tostring(err_t), err_t
         end
 
         if options ~= nil then
-          local errors
-          ok, errors = validate_options_value(options, schema, "delete")
+          ok, err = validate_options_value(options, schema, "delete")
           if not ok then
-            local err_t = self.errors:invalid_options(errors)
+            local err_t = self.errors:invalid_options(err)
             return nil, tostring(err_t), err_t
           end
         end
@@ -670,8 +703,7 @@ local function generate_foreign_key_methods(schema)
 
         local cascade_entries = find_cascade_delete_entities(self, entity)
 
-        local _
-        _, err_t = self.strategy:delete_by_field(name, unique_value, options)
+        local _, err_t = self.strategy:delete_by_field(name, unique_value, options)
         if err_t then
           return nil, tostring(err_t), err_t
         end
