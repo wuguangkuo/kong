@@ -417,6 +417,18 @@ local MetaSchema = Schema.new({
       },
     },
     {
+      on_entity_input = {
+        type = "function",
+        nilable = true
+      },
+    },
+    {
+      on_entity_output = {
+        type = "function",
+        nilable = true
+      },
+    },
+    {
       dao = {
         type = "string",
         nilable = true

@@ -279,6 +279,10 @@ local function check_insert(self, entity, options)
 
   entity_to_insert = self.schema:process_input_fields(entity_to_insert, "insert")
 
+  if self.on_entity_input then
+    entity_to_insert = self:on_entity_input(entity_to_insert, "insert")
+  end
+
   return entity_to_insert
 end
 
@@ -347,6 +351,10 @@ local function check_update(self, key, entity, options, name)
 
   entity_to_update = self.schema:process_input_fields(entity_to_update, "update")
 
+  if self.on_entity_input then
+    entity_to_update = self:on_entity_input(entity_to_update, "update")
+  end
+
   return entity_to_update
 end
 
@@ -390,6 +398,10 @@ local function check_upsert(self, entity, options, name, value)
   end
 
   entity_to_upsert = self.schema:process_input_fields(entity_to_upsert, "upsert")
+
+  if self.on_entity_input then
+    entity_to_upsert = self:on_entity_input(entity_to_upsert, "upsert")
+  end
 
   return entity_to_upsert
 end
@@ -1045,6 +1057,11 @@ end
 function DAO:row_to_entity(row, options)
   if options ~= nil then
     validate_options_type(options)
+  end
+
+  if self.on_entity_output then
+    -- TODO: does it make sense to pass `context` to this?
+    row = self:on_entity_output(row)
   end
 
   -- TODO: does it make sense to pass `context` to this?
