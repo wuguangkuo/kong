@@ -68,6 +68,8 @@ local field_schema = {
   { generate_admin_api = { type = "boolean" }, },
   { legacy = { type = "boolean" }, },
   { immutable = { type = "boolean" }, },
+  { on_input = { type = "function" }, },
+  { on_output = { type = "function" }, },
 }
 
 for _, field in ipairs(validators) do

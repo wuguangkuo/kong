@@ -1573,6 +1573,29 @@ function Schema:process_auto_fields(data, context, nulls)
 end
 
 
+local function process_fields(self, data, context, direction)
+  -- TODO: do we need to deepcopy when process_auto_fields does it too?
+  -- data = tablex.deepcopy(data)
+  for key, field in self:each_field(data) do
+    if field[direction] then
+      data[key] = field[direction](data[key], context)
+    end
+  end
+
+  return data
+end
+
+
+function Schema:process_input_fields(data, context)
+  return process_fields(self, data, context, "on_input")
+end
+
+
+function Schema:process_output_fields(data, context)
+  return process_fields(self, data, context, "on_output")
+end
+
+
 --- Schema-aware deep-merge of two entities.
 -- Uses schema knowledge to merge two records field-by-field,
 -- but not merge the content of two arrays.
@@ -1688,7 +1711,7 @@ function Schema:validate(input, full_check)
 end
 
 
--- Iterate through input fields on update and check agianst schema for
+-- Iterate through input fields on update and check against schema for
 -- immutable attribute. If immutable attribute is set, compare input values
 -- against entity values to detirmine whether input is valid.
 -- @param input The input table.

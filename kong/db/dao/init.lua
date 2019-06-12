@@ -277,6 +277,8 @@ local function check_insert(self, entity, options)
     entity_to_insert.cache_key = self:cache_key(entity_to_insert)
   end
 
+  entity_to_insert = self.schema:process_input_fields(entity_to_insert, "insert")
+
   return entity_to_insert
 end
 
@@ -343,7 +345,9 @@ local function check_update(self, key, entity, options, name)
     entity_to_update.cache_key = self:cache_key(entity_to_update)
   end
 
-  return entity_to_update, rbw_entity
+  entity_to_update = self.schema:process_input_fields(entity_to_update, "update")
+
+  return entity_to_update
 end
 
 
@@ -384,6 +388,8 @@ local function check_upsert(self, entity, options, name, value)
   if self.schema.cache_key and #self.schema.cache_key > 1 then
     entity_to_upsert.cache_key = self:cache_key(entity_to_upsert)
   end
+
+  entity_to_upsert = self.schema:process_input_fields(entity_to_upsert, "upsert")
 
   return entity_to_upsert
 end
@@ -1041,8 +1047,10 @@ function DAO:row_to_entity(row, options)
     validate_options_type(options)
   end
 
-  local nulls = options and options.nulls
+  -- TODO: does it make sense to pass `context` to this?
+  row = self.schema:process_output_fields(row)
 
+  local nulls = options and options.nulls
   local entity, errors = self.schema:process_auto_fields(row, "select", nulls)
   if not entity then
     local err_t = self.errors:schema_violation(errors)
