@@ -1573,12 +1573,18 @@ function Schema:process_auto_fields(data, context, nulls)
 end
 
 
-local function process_fields(self, data, context, direction)
-  -- TODO: do we need to deepcopy when process_auto_fields does it too?
-  -- data = tablex.deepcopy(data)
-  for key, field in self:each_field(data) do
-    if field[direction] then
-      data[key] = field[direction](data[key], context)
+local function process_fields(self, data, context, options, direction)
+  for key, field in self:each_field(self, data) do
+    if context ~= "update" or data[key] ~= nil or direction ~= "on_input" then
+      --if field.type == "record" then
+        -- TODO: make it recursive?
+      --elseif field.type == "foreign" then
+        -- TODO: make it recursive?
+      --end
+
+      if type(field[direction]) == "function" then
+        data[key] = field[direction](field, data[key], context, options)
+      end
     end
   end
 
@@ -1586,13 +1592,13 @@ local function process_fields(self, data, context, direction)
 end
 
 
-function Schema:process_input_fields(data, context)
-  return process_fields(self, data, context, "on_input")
+function Schema:process_input_fields(data, context, options)
+  return process_fields(self, data, context, options, "on_input")
 end
 
 
-function Schema:process_output_fields(data, context)
-  return process_fields(self, data, context, "on_output")
+function Schema:process_output_fields(data, context, options)
+  return process_fields(self, data, context, options, "on_output")
 end
 
 
@@ -1676,6 +1682,17 @@ function Schema:validate(input, full_check)
     full_check = true
   end
 
+  local _, errors = self:validate_fields(input, full_check)
+  local ok, errors = self:validate_entity(input, full_check, errors)
+  if not ok then
+    return nil, errors
+  end
+
+  return true
+end
+
+
+function Schema:validate_fields(input, full_check)
   if self.subschema_key then
     -- If we can't determine the subschema, do not validate any further
     local key = input[self.subschema_key]
@@ -1702,11 +1719,23 @@ function Schema:validate(input, full_check)
     end
   end
 
+  if next(errors) then
+    return nil, errors
+  end
+
+  return true
+end
+
+
+function Schema:validate_entity(input, full_check, errors)
+  errors = errors or {}
+
   run_entity_checks(self, input, full_check, errors)
 
   if next(errors) then
     return nil, errors
   end
+
   return true
 end
 
@@ -1750,18 +1779,16 @@ function Schema:validate_insert(input)
   return self:validate(input, true)
 end
 
+function Schema:validate_insert_fields(input)
+  return self:validate_fields(input, true)
+end
 
--- Validate a table against the schema, accepting a partial entity.
--- It validates fields for their attributes, but accepts missing `required`
--- fields when those are not needed for global checks,
--- and runs the global checks against the entire table.
--- @param input The input table.
--- @return True on success.
--- On failure, it returns nil and a table containing all errors,
--- indexed numerically for general errors, and by field name for field errors.
--- In all cases, the input table is untouched.
-function Schema:validate_update(input)
+function Schema:validate_insert_entity(input, errors)
+  return self:validate_entity(input, true, errors)
+end
 
+
+local function validate_update(func)
   -- Monkey-patch some error messages to make it clearer why they
   -- apply during an update. This avoids propagating update-awareness
   -- all the way down to the entity checkers (which would otherwise
@@ -1773,7 +1800,7 @@ function Schema:validate_update(input)
   validation_errors.AT_LEAST_ONE_OF = "when updating, " .. aloo
   validation_errors.CONDITIONAL_AT_LEAST_ONE_OF = "when updating, " .. caloo
 
-  local ok, errors = self:validate(input, false)
+  local ok, errors = func()
 
   -- Restore the original error messages
   validation_errors.REQUIRED_FOR_ENTITY_CHECK = rfec
@@ -1781,6 +1808,34 @@ function Schema:validate_update(input)
   validation_errors.CONDITIONAL_AT_LEAST_ONE_OF = caloo
 
   return ok, errors
+end
+
+
+-- Validate a table against the schema, accepting a partial entity.
+-- It validates fields for their attributes, but accepts missing `required`
+-- fields when those are not needed for global checks,
+-- and runs the global checks against the entire table.
+-- @param input The input table.
+-- @return True on success.
+-- On failure, it returns nil and a table containing all errors,
+-- indexed numerically for general errors, and by field name for field errors.
+-- In all cases, the input table is untouched.
+function Schema:validate_update(input)
+  return validate_update(function()
+    return self:validate(input, false)
+  end)
+end
+
+
+function Schema:validate_update_fields(input)
+  return self:validate_fields(input, false)
+end
+
+
+function Schema:validate_update_entity(input, errors)
+  return validate_update(function()
+    return self:validate_entity(input, false, errors)
+  end)
 end
 
 
@@ -1794,6 +1849,16 @@ end
 -- In all cases, the input table is untouched.
 function Schema:validate_upsert(input)
   return self:validate(input, true)
+end
+
+
+function Schema:validate_upsert_fields(input)
+  return self:validate_fields(input, true)
+end
+
+
+function Schema:validate_upsert_entity(input, errors)
+  return self:validate_entity(input, true, errors)
 end
 
 

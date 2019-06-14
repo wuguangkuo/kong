@@ -259,10 +259,23 @@ local function check_insert(self, entity, options)
     return nil, err, err_t
   end
 
-  local ok, errors = self.schema:validate_insert(entity_to_insert)
+  local ok, errors = self.schema:validate_insert_fields(entity_to_insert)
+  if ok then
+    entity_to_insert = self.schema:process_input_fields(entity_to_insert, "insert", options)
+  end
+
+  ok, errors = self.schema:validate_insert_entity(entity_to_insert, errors)
   if not ok then
     local err_t = self.errors:schema_violation(errors)
     return nil, tostring(err_t), err_t
+  end
+
+  if self.schema.cache_key and #self.schema.cache_key > 1 then
+    entity_to_insert.cache_key = self:cache_key(entity_to_insert)
+  end
+
+  if type(self.on_entity_input) == "function" then
+    entity_to_insert = self:on_entity_input(entity_to_insert, "insert")
   end
 
   if options ~= nil then
@@ -271,16 +284,6 @@ local function check_insert(self, entity, options)
       local err_t = self.errors:invalid_options(errors)
       return nil, tostring(err_t), err_t
     end
-  end
-
-  if self.schema.cache_key and #self.schema.cache_key > 1 then
-    entity_to_insert.cache_key = self:cache_key(entity_to_insert)
-  end
-
-  entity_to_insert = self.schema:process_input_fields(entity_to_insert, "insert")
-
-  if self.on_entity_input then
-    entity_to_insert = self:on_entity_input(entity_to_insert, "insert")
   end
 
   return entity_to_insert
@@ -295,67 +298,75 @@ local function check_update(self, key, entity, options, name)
     return nil, nil, tostring(err_t), err_t
   end
 
-  local rbw_entity
-  if read_before_write then
-    local err, err_t
-    if name then
-       rbw_entity, err, err_t = self["select_by_" .. name](self, key, options)
-    else
-       rbw_entity, err, err_t = self:select(key, options)
-    end
-    if err then
-      return nil, nil, err, err_t
-    end
+  local has_on_entity_input = type(self.on_entity_input) == "function"
 
-    if rbw_entity and check_immutable_fields then
-      local ok, errors = self.schema:validate_immutable_fields(entity_to_update, rbw_entity)
-
-      if not ok then
-        local err_t = self.errors:schema_violation(errors)
-        return nil, nil, tostring(err_t), err_t
-      end
-    end
-
-    if rbw_entity then
-      entity_to_update = self.schema:merge_values(entity_to_update, rbw_entity)
-    else
-      local err_t = name
-                    and self.errors:not_found_by_field({ [name] = key })
-                    or  self.errors:not_found(key)
-      return nil, nil, tostring(err_t), err_t
-    end
-  end
+  read_before_write = read_before_write or has_on_entity_input
 
   local ok, err, err_t = resolve_foreign(self, entity_to_update)
   if not ok then
     return nil, err, err_t
   end
 
-  local ok, errors = self.schema:validate_update(entity_to_update)
+  local rbw_entity
+  local ok, errors = self.schema:validate_update_fields(entity_to_update)
+  if ok then
+    if read_before_write then
+      local err, err_t
+      if name then
+         rbw_entity, err, err_t = self["select_by_" .. name](self, key, options)
+      else
+         rbw_entity, err, err_t = self:select(key, options)
+      end
+      if err then
+        return nil, nil, err, err_t
+      end
+
+      if rbw_entity and check_immutable_fields then
+        local ok, errors = self.schema:validate_immutable_fields(entity_to_update, rbw_entity)
+        if not ok then
+          local err_t = self.errors:schema_violation(errors)
+          return nil, nil, tostring(err_t), err_t
+        end
+      end
+
+      if rbw_entity then
+        entity_to_update = self.schema:process_input_fields(entity_to_update, "update", options)
+        entity_to_update = self.schema:merge_values(entity_to_update, rbw_entity)
+      else
+        local err_t = name
+                      and self.errors:not_found_by_field({ [name] = key })
+                      or  self.errors:not_found(key)
+        return nil, nil, tostring(err_t), err_t
+      end
+
+    else
+      entity_to_update = self.schema:process_input_fields(entity_to_update, "update", options)
+    end
+  end
+
+  ok, errors = self.schema:validate_update_entity(entity_to_update, errors)
   if not ok then
     local err_t = self.errors:schema_violation(errors)
     return nil, nil, tostring(err_t), err_t
-  end
-
-  if options ~= nil then
-    ok, errors = validate_options_value(options, self.schema, "update")
-    if not ok then
-      local err_t = self.errors:invalid_options(errors)
-      return nil, nil, tostring(err_t), err_t
-    end
   end
 
   if self.schema.cache_key and #self.schema.cache_key > 1 then
     entity_to_update.cache_key = self:cache_key(entity_to_update)
   end
 
-  entity_to_update = self.schema:process_input_fields(entity_to_update, "update")
-
-  if self.on_entity_input then
-    entity_to_update = self:on_entity_input(entity_to_update, "update")
+  if has_on_entity_input then
+    entity_to_update = self:on_entity_input(entity_to_update, "update", options)
   end
 
-  return entity_to_update
+  if options ~= nil then
+    local ok, errors = validate_options_value(options, self.schema, "update")
+    if not ok then
+      local err_t = self.errors:invalid_options(errors)
+      return nil, nil, tostring(err_t), err_t
+    end
+  end
+
+  return entity_to_update, rbw_entity
 end
 
 
@@ -375,10 +386,23 @@ local function check_upsert(self, entity, options, name, value)
     return nil, err, err_t
   end
 
-  local ok, errors = self.schema:validate_upsert(entity_to_upsert)
+  local ok, errors = self.schema:validate_upsert_fields(entity_to_upsert)
+  if ok then
+    entity_to_upsert = self.schema:process_input_fields(entity_to_upsert, "upsert", options)
+  end
+
+  ok, errors = self.schema:validate_upsert_entity(entity_to_upsert, errors)
   if not ok then
     local err_t = self.errors:schema_violation(errors)
     return nil, tostring(err_t), err_t
+  end
+
+  if self.schema.cache_key and #self.schema.cache_key > 1 then
+    entity_to_upsert.cache_key = self:cache_key(entity_to_upsert)
+  end
+
+  if type(self.on_entity_input) == "function" then
+    entity_to_upsert = self:on_entity_input(entity_to_upsert, "upsert")
   end
 
   if name then
@@ -391,16 +415,6 @@ local function check_upsert(self, entity, options, name, value)
       local err_t = self.errors:invalid_options(errors)
       return nil, tostring(err_t), err_t
     end
-  end
-
-  if self.schema.cache_key and #self.schema.cache_key > 1 then
-    entity_to_upsert.cache_key = self:cache_key(entity_to_upsert)
-  end
-
-  entity_to_upsert = self.schema:process_input_fields(entity_to_upsert, "upsert")
-
-  if self.on_entity_input then
-    entity_to_upsert = self:on_entity_input(entity_to_upsert, "upsert")
   end
 
   return entity_to_upsert
@@ -1059,13 +1073,11 @@ function DAO:row_to_entity(row, options)
     validate_options_type(options)
   end
 
-  if self.on_entity_output then
-    -- TODO: does it make sense to pass `context` to this?
-    row = self:on_entity_output(row)
+  if type(self.on_entity_output) == "function" then
+    row = self:on_entity_output(row, options)
   end
 
-  -- TODO: does it make sense to pass `context` to this?
-  row = self.schema:process_output_fields(row)
+  row = self.schema:process_output_fields(row, options)
 
   local nulls = options and options.nulls
   local entity, errors = self.schema:process_auto_fields(row, "select", nulls)
