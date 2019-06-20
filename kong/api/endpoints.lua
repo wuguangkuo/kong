@@ -277,7 +277,8 @@ end
 -- and
 --
 -- /services
-local function get_collection_endpoint(schema, foreign_schema, foreign_field_name, method)
+local function get_collection_endpoint(schema, foreign_schema, foreign_field_name, method, k)
+  k = k or ok
   return not foreign_schema and function(self, db, helpers)
     local next_page_tags = ""
 
@@ -296,7 +297,7 @@ local function get_collection_endpoint(schema, foreign_schema, foreign_field_nam
                                      escape_uri(offset),
                                      next_page_tags) or null
 
-    return ok {
+    return k {
       data   = data,
       offset = offset,
       next   = next_page,
@@ -325,7 +326,7 @@ local function get_collection_endpoint(schema, foreign_schema, foreign_field_nam
                                      foreign_key, schema.name, escape_uri(offset)) or null
 
 
-    return ok {
+    return k {
       data   = data,
       offset = offset,
       next   = next_page,
@@ -344,7 +345,8 @@ end
 -- and
 --
 -- /services
-local function post_collection_endpoint(schema, foreign_schema, foreign_field_name, method)
+local function post_collection_endpoint(schema, foreign_schema, foreign_field_name, method, k)
+  k = k or created
   return function(self, db, helpers, post_process)
     if foreign_schema then
       local foreign_entity, _, err_t = select_entity(self, db, foreign_schema)
@@ -371,7 +373,7 @@ local function post_collection_endpoint(schema, foreign_schema, foreign_field_na
       end
     end
 
-    return created(entity)
+    return k(entity)
   end
 end
 
@@ -386,7 +388,8 @@ end
 -- and
 --
 -- /services/:services
-local function get_entity_endpoint(schema, foreign_schema, foreign_field_name, method)
+local function get_entity_endpoint(schema, foreign_schema, foreign_field_name, method, k)
+  k = k or ok
   return function(self, db, helpers)
     local entity, _, err_t
     if foreign_schema then
@@ -421,7 +424,7 @@ local function get_entity_endpoint(schema, foreign_schema, foreign_field_name, m
       end
     end
 
-    return ok(entity)
+    return k(entity)
   end
 end
 
@@ -436,7 +439,8 @@ end
 -- and
 --
 -- /services/:services
-local function put_entity_endpoint(schema, foreign_schema, foreign_field_name, method)
+local function put_entity_endpoint(schema, foreign_schema, foreign_field_name, method, k)
+  k = k or ok
   return not foreign_schema and function(self, db, helpers)
     local entity, _, err_t = upsert_entity(self, db, schema, method)
     if err_t then
@@ -447,7 +451,7 @@ local function put_entity_endpoint(schema, foreign_schema, foreign_field_name, m
       return not_found()
     end
 
-    return ok(entity)
+    return k(entity)
 
   end or function(self, db, helpers)
     local entity, _, err_t = select_entity(self, db, schema)
@@ -475,7 +479,7 @@ local function put_entity_endpoint(schema, foreign_schema, foreign_field_name, m
       return not_found()
     end
 
-    return ok(entity)
+    return k(entity)
   end
 end
 
@@ -490,7 +494,8 @@ end
 -- and
 --
 -- /services/:services
-local function patch_entity_endpoint(schema, foreign_schema, foreign_field_name, method)
+local function patch_entity_endpoint(schema, foreign_schema, foreign_field_name, method, k)
+  k = k or ok
   return not foreign_schema and function(self, db, helpers)
     local entity, _, err_t = update_entity(self, db, schema, method)
     if err_t then
@@ -501,7 +506,7 @@ local function patch_entity_endpoint(schema, foreign_schema, foreign_field_name,
       return not_found()
     end
 
-    return ok(entity)
+    return k(entity)
 
   end or function(self, db, helpers)
     local entity, _, err_t = select_entity(self, db, schema)
@@ -529,7 +534,7 @@ local function patch_entity_endpoint(schema, foreign_schema, foreign_field_name,
       return not_found()
     end
 
-    return ok(entity)
+    return k(entity)
   end
 end
 
@@ -544,7 +549,8 @@ end
 -- and
 --
 -- /services/:services
-local function delete_entity_endpoint(schema, foreign_schema, foreign_field_name, method)
+local function delete_entity_endpoint(schema, foreign_schema, foreign_field_name, method, k)
+  k = k or method_not_allowed
   return not foreign_schema and  function(self, db, helpers)
     local _, _, err_t = delete_entity(self, db, schema, method)
     if err_t then
@@ -564,7 +570,7 @@ local function delete_entity_endpoint(schema, foreign_schema, foreign_field_name
       return not_found()
     end
 
-    return method_not_allowed()
+    return k()
   end
 end
 
