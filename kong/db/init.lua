@@ -63,6 +63,8 @@ function DB.new(kong_config, strategy)
       end
       schemas[entity_name] = entity
     end
+
+    require("kong.db.schema.entities.routes_subschemas").load()
   end
 
   -- load strategy
