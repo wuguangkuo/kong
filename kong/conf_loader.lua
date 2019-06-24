@@ -43,12 +43,31 @@ local HEADER_KEY_TO_NAME = {
 }
 
 
-local DYNAMIC_KEY_PREFIXES = {
-  ["nginx_http_directives"] = "nginx_http_",
-  ["nginx_proxy_directives"] = "nginx_proxy_",
-  ["nginx_stream_directives"] = "nginx_stream_",
-  ["nginx_sproxy_directives"] = "nginx_sproxy_",
-  ["nginx_admin_directives"] = "nginx_admin_",
+local DYNAMIC_KEY_NAMESPACES = {
+  {
+    injected_conf_name = "nginx_http_upstream_directives",
+    prefix = "nginx_http_upstream_",
+  },
+  {
+    injected_conf_name = "nginx_http_directives",
+    prefix = "nginx_http_",
+  },
+  {
+    injected_conf_name = "nginx_stream_directives",
+    prefix = "nginx_stream_",
+  },
+  {
+    injected_conf_name = "nginx_proxy_directives",
+    prefix = "nginx_proxy_", -- TODO: nginx_http_proxy
+  },
+  {
+    injected_conf_name = "nginx_sproxy_directives",
+    prefix = "nginx_sproxy_", -- TODO: nginx_stream_proxy
+  },
+  {
+    injected_conf_name = "nginx_admin_directives",
+    prefix = "nginx_admin_", -- TODO: nginx_http_admin (optional)
+  },
 }
 
 
@@ -99,7 +118,18 @@ local CONF_INFERENCES = {
   db_cache_warmup_entities = { typ = "array" },
   nginx_user = { typ = "string" },
   nginx_worker_processes = { typ = "string" },
-  upstream_keepalive = { typ = "number" },
+  upstream_keepalive = { -- TODO: remove since deprecated in 1.3
+    typ = "number",
+    deprecated = {
+      default = 60,
+      replacement = "nginx_http_upstream_keepalive",
+      alias = function(conf)
+        if conf.upstream_keepalive == 0 then
+          conf.nginx_http_upstream_keepalive = "NONE"
+        end
+      end,
+    }
+  },
   headers = { typ = "array" },
   trusted_ips = { typ = "array" },
   real_ip_header = { typ = "string" },
@@ -288,6 +318,22 @@ local function check_and_infer(conf)
     end
 
     conf[k] = value
+  end
+
+  -- consider pre-established config properties now moved to nginx_* injections
+  for property_name, v_schema in pairs(CONF_INFERENCES) do
+    if v_schema.deprecated then
+      if conf[property_name] ~= nil then
+        log.warn("the '%s' configuration property is deprecated, use " ..
+                 "'%s' instead", property_name, v_schema.deprecated.replacement)
+
+      else
+        -- ensure backwards-compat with existing Nginx templates
+        conf[property_name] = v_schema.deprecated.default
+      end
+
+      v_schema.deprecated.alias(conf)
+    end
   end
 
   ---------------------
@@ -629,15 +675,19 @@ local function parse_listeners(values, flags)
 end
 
 
-local function parse_nginx_directives(dyn_key_prefix, conf)
+local function parse_nginx_directives(dyn_namespace, conf, injected_in_namespace)
   conf = conf or {}
   local directives = {}
 
   for k, v in pairs(conf) do
-    if type(k) == "string" then
-      local directive = string.match(k, dyn_key_prefix .. "(.+)")
+    if type(k) == "string" and not injected_in_namespace[k] then
+      local directive = string.match(k, dyn_namespace.prefix .. "(.+)")
       if directive then
-        table.insert(directives, { name = directive, value = v })
+        if v ~= "NONE" then
+          table.insert(directives, { name = directive, value = v })
+        end
+
+        injected_in_namespace[k] = true
       end
     end
   end
@@ -725,11 +775,11 @@ local function load(path, custom_conf)
     -- find dynamic keys that need to be loaded
     local dynamic_keys = {}
 
-    local function find_dynamic_keys(dyn_key_prefix, t)
+    local function find_dynamic_keys(dyn_prefix, t)
       t = t or {}
 
       for k, v in pairs(t) do
-        local directive = string.match(k, "(" .. dyn_key_prefix .. ".+)")
+        local directive = string.match(k, "(" .. dyn_prefix .. ".+)")
         if directive then
           dynamic_keys[directive] = true
           t[k] = tostring(v)
@@ -755,15 +805,16 @@ local function load(path, custom_conf)
       end
     end
 
-    for _, dyn_key_prefix in pairs(DYNAMIC_KEY_PREFIXES) do
-      find_dynamic_keys(dyn_key_prefix, custom_conf)
-      find_dynamic_keys(dyn_key_prefix, kong_env_vars)
-      find_dynamic_keys(dyn_key_prefix, from_file_conf)
+    for _, dyn_namespace in ipairs(DYNAMIC_KEY_NAMESPACES) do
+      find_dynamic_keys(dyn_namespace.prefix, defaults) -- tostring() defaults
+      find_dynamic_keys(dyn_namespace.prefix, custom_conf)
+      find_dynamic_keys(dyn_namespace.prefix, kong_env_vars)
+      find_dynamic_keys(dyn_namespace.prefix, from_file_conf)
     end
 
     -- union (add dynamic keys to `defaults` to prevent removal of the keys
     -- during the intersection that happens later)
-    defaults = tablex.merge(defaults, dynamic_keys, true)
+    defaults = tablex.merge(dynamic_keys, defaults, true)
   end
 
   -- merge default conf with file conf, ENV variables and arg conf (with precedence)
@@ -777,10 +828,18 @@ local function load(path, custom_conf)
 
   conf = tablex.merge(conf, defaults) -- intersection (remove extraneous properties)
 
-  -- nginx directives from conf
-  for directives_block, dyn_key_prefix in pairs(DYNAMIC_KEY_PREFIXES) do
-    local directives = parse_nginx_directives(dyn_key_prefix, conf)
-    conf[directives_block] = setmetatable(directives, _nop_tostring_mt)
+  do
+    local injected_in_namespace = {}
+
+    -- nginx directives from conf
+    for _, dyn_namespace in ipairs(DYNAMIC_KEY_NAMESPACES) do
+      injected_in_namespace[dyn_namespace.injected_conf_name] = true
+
+      local directives = parse_nginx_directives(dyn_namespace, conf,
+                                                injected_in_namespace)
+      conf[dyn_namespace.injected_conf_name] = setmetatable(directives,
+                                                            _nop_tostring_mt)
+    end
   end
 
   do

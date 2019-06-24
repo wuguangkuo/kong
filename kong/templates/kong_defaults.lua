@@ -26,7 +26,7 @@ ssl_cipher_suite = modern
 ssl_ciphers = ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256
 admin_ssl_cert = NONE
 admin_ssl_cert_key = NONE
-upstream_keepalive = 60
+upstream_keepalive = NONE # deprecated
 headers = server_tokens, latency_tokens
 trusted_ips = NONE
 real_ip_header = X-Real-IP
@@ -34,6 +34,8 @@ real_ip_recursive = off
 client_max_body_size = 0
 client_body_buffer_size = 8k
 error_default_type = text/plain
+
+nginx_http_upstream_keepalive = 60
 
 database = postgres
 pg_host = 127.0.0.1
