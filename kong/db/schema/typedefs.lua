@@ -121,19 +121,25 @@ end
 
 
 local function validate_wildcard_host(host)
-  local idx = string.find(host, "*", nil, true)
-  if idx then
-    if idx ~= 1 and idx ~= #host then
+  -- substitute wildcard for upcoming host normalization
+  local mock_host, count = string.gsub(host, "%*", "wildcard")
+  if count == 1 then
+    local valid_wildcard
+    for _, pattern in ipairs({ "^%*%.", "%.%*$", "^[^*]*$" }) do
+      local idx = string.find(host, pattern)
+      if idx then
+        valid_wildcard = true
+      end
+    end
+
+    if not valid_wildcard then
       return nil, "wildcard must be leftmost or rightmost character"
     end
 
-    -- substitute wildcard for upcoming host normalization
-    local mock_host, count = string.gsub(host, "%*", "wildcard")
-    if count > 1 then
-      return nil, "only one wildcard must be specified"
-    end
-
     host = mock_host
+
+  elseif count > 1 then
+    return nil, "only one wildcard must be specified"
   end
 
   local res, err_or_port = utils.normalize_ip(host)
@@ -141,11 +147,11 @@ local function validate_wildcard_host(host)
     return nil, "invalid value: " .. host
   end
 
-  if res.type ~= "name" then
+  if res and res.type ~= "name" then
     return nil, "must not be an IP"
   end
 
-  if err_or_port == "invalid port number" or type(res.port) == "number" then
+  if err_or_port == "invalid port number" or res and type(res.port) == "number" then
     return nil, "must not have a port"
   end
 

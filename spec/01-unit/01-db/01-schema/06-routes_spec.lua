@@ -20,7 +20,7 @@ describe("routes schema", function()
       name           = "my_route",
       protocols      = { "http" },
       methods        = { "GET", "POST" },
-      hosts          = { "example.com" },
+      headers        = { host = {"example.com" } },
       paths          = { "/ovo" },
       regex_priority = 1,
       strip_path     = false,
@@ -83,7 +83,7 @@ describe("routes schema", function()
     local tests = {
       { 1,    { protocols = { "http" },                                }, {} },
       { true, { protocols = { "http" }, service = s, methods = {"GET"} }, {"hosts", "paths"} },
-      { true, { protocols = { "http" }, service = s, hosts = {"x.y"} },   {"methods", "paths"} },
+      { true, { protocols = { "http" }, service = s, headers = { host = { "x.y" } } },   {"methods", "paths"} },
       { true, { protocols = { "http" }, service = s, paths = {"/foo"} },     {"methods", "hosts"} },
     }
     for i, test in ipairs(tests) do
@@ -139,7 +139,7 @@ describe("routes schema", function()
     assert.same(ngx.null,      route.name)
     assert.same({ "http" },    route.protocols)
     assert.same(ngx.null,      route.methods)
-    assert.same(ngx.null,      route.hosts)
+    assert.same(ngx.null,      route.headers)
     assert.same({ "/foo" },    route.paths)
     assert.same(0,             route.regex_priority)
     assert.same(true,          route.strip_path)
@@ -266,7 +266,7 @@ describe("routes schema", function()
         protocols = { "http" },
         service = { id = a_valid_uuid },
         methods = {},
-        hosts = {},
+        headers = {},
         paths = { "/" },
       }, "insert")
 
@@ -280,7 +280,7 @@ describe("routes schema", function()
         protocols = { "http" },
         service = { id = a_valid_uuid },
         methods = {},
-        hosts = {},
+        headers = {},
         paths = { "/abcd~user~2" },
       }, "insert")
 
@@ -297,7 +297,7 @@ describe("routes schema", function()
           protocols = { "http" },
           service = { id = a_valid_uuid },
           methods = {},
-          hosts = {},
+          headers = {},
           paths = { valid_paths[i] },
         }, "insert")
 
@@ -312,7 +312,7 @@ describe("routes schema", function()
         protocols = { "http" },
         service = { id = a_valid_uuid },
         methods = {},
-        hosts = {},
+        headers = {},
         paths = { "/ovo/" },
       }, "insert")
 
@@ -326,22 +326,22 @@ describe("routes schema", function()
     -- refusals
     it("must be a string", function()
       local route = {
-        hosts = { false },
+        headers = { host = { false } },
       }
 
       local ok, err = Routes:validate(route)
       assert.falsy(ok)
-      assert.equal("expected a string", err.hosts[1])
+      assert.equal("expected a string", err.headers[1])
     end)
 
     it("must be a non-empty string", function()
       local route = {
-        hosts = { "" },
+        headers = { host = { "" } },
       }
 
       local ok, err = Routes:validate(route)
       assert.falsy(ok)
-      assert.equal("length must be at least 1", err.hosts[1])
+      assert.equal("length must be at least 1", err.headers[1])
     end)
 
     it("rejects invalid hostnames", function()
@@ -360,33 +360,33 @@ describe("routes schema", function()
 
       for i = 1, #invalid_hosts do
         local route = {
-          hosts = { invalid_hosts[i] },
+          headers = { host = { invalid_hosts[i] } },
         }
 
         local ok, err = Routes:validate(route)
         assert.falsy(ok)
-        assert.equal("invalid value: " .. invalid_hosts[i], err.hosts[1])
+        assert.equal("invalid value: " .. invalid_hosts[i], err.headers.host[1])
       end
     end)
 
     it("rejects values with a valid port", function()
       local route = {
-        hosts = { "example.com:80" }
+        headers = { host = { "example.com:80" } }
       }
 
       local ok, err = Routes:validate(route)
       assert.falsy(ok)
-      assert.equal("must not have a port", err.hosts[1])
+      assert.equal("must not have a port", err.headers.host[1])
     end)
 
     it("rejects values with an invalid port", function()
       local route = {
-        hosts = { "example.com:1000000" }
+        headers = { host = { "example.com:1000000" } }
       }
 
       local ok, err = Routes:validate(route)
       assert.falsy(ok)
-      assert.equal("must not have a port", err.hosts[1])
+      assert.equal("must not have a port", err.headers.host[1])
     end)
 
     it("rejects invalid wildcard placement", function()
@@ -398,13 +398,12 @@ describe("routes schema", function()
 
       for i = 1, #invalid_hosts do
         local route = {
-          hosts = { invalid_hosts[i] },
+          headers = { host = { invalid_hosts[i] } },
         }
 
         local ok, err = Routes:validate(route)
         assert.falsy(ok)
-        assert.equal("invalid wildcard: must be placed at leftmost or " ..
-                     "rightmost label", err.hosts[1])
+        assert.equal("wildcard must be leftmost or rightmost character", err.headers.host[1])
       end
     end)
 
@@ -417,13 +416,13 @@ describe("routes schema", function()
 
       for i = 1, #invalid_hosts do
         local route = {
-          hosts = { invalid_hosts[i] },
+          headers = { host = { invalid_hosts[i] } },
         }
 
         local ok, err = Routes:validate(route)
         assert.falsy(ok)
-        assert.equal("invalid wildcard: must have at most one wildcard",
-                     err.hosts[1])
+        assert.equal("only one wildcard must be specified",
+                     err.headers.host[1])
       end
     end)
 
@@ -462,7 +461,7 @@ describe("routes schema", function()
           service = { id = a_valid_uuid },
           methods = {},
           paths = {},
-          hosts = { valid_hosts[i] },
+          headers = { host = { valid_hosts[i] } },
         }, "insert")
 
         local ok, err = Routes:validate(route)
@@ -483,7 +482,7 @@ describe("routes schema", function()
           service = { id = a_valid_uuid },
           methods = {},
           paths = {},
-          hosts = { valid_hosts[i] },
+          headers = { host = { valid_hosts[i] } },
         }, "insert")
 
         local ok, err = Routes:validate(route)
@@ -556,7 +555,7 @@ describe("routes schema", function()
           protocols = { "http" },
           service = { id = a_valid_uuid },
           paths = {},
-          hosts = {},
+          headers = {},
           methods = { valid_methods[i] },
         }, "insert")
 
@@ -664,6 +663,24 @@ describe("routes schema", function()
       assert.is_nil(errs)
       assert.truthy(ok)
       assert.same({ "tls" }, route.protocols)
+    end)
+
+    it("if 'protocol = tcp/tls', then 'headers' is empty", function()
+      local s = { id = "a4fbd24e-6a52-4937-bd78-2536713072d2" }
+      for _, v in ipairs({ "tcp", "tls" }) do
+        local route = Routes:process_auto_fields({
+          protocols = { v },
+          sources = {{ ip = "127.0.0.1" }},
+          headers = { host = { "example.com" } },
+          service = s,
+        }, "insert")
+        local ok, errs = Routes:validate(route)
+        assert.falsy(ok)
+        assert.same({
+          ["@entity"] = { "cannot set 'headers' when 'protocols' is 'tcp' or 'tls'" },
+          headers = "length must be 0",
+        }, errs)
+      end
     end)
 
     it("if 'protocol = tcp/tls', then 'paths' is empty", function()
@@ -952,7 +969,7 @@ describe("routes schema", function()
     assert.falsy(ok)
     assert.same({
       ["@entity"] = {
-        "must set one of 'methods', 'hosts', 'paths' when 'protocols' is 'http'"
+        "must set one of 'methods', 'headers', 'paths' when 'protocols' is 'http'"
       }
     }, errs)
 
@@ -964,7 +981,7 @@ describe("routes schema", function()
     assert.falsy(ok)
     assert.same({
       ["@entity"] = {
-        "must set one of 'methods', 'hosts', 'paths', 'snis' when 'protocols' is 'https'"
+        "must set one of 'methods', 'headers', 'paths', 'snis' when 'protocols' is 'https'"
       }
     }, errs)
   end)
